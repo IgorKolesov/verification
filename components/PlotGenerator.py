@@ -234,7 +234,7 @@ class PlotGenerator:
         plt.close()
     
     @staticmethod
-    def generate_all_plots(tasks: List[Task], total_ticks: int, output_dir: str = ".") -> None:
+    def generate_all_plots(tasks: List[Task], total_ticks: int, output_dir: str = "./report") -> None:
         output_path = Path(output_dir)
         output_path.mkdir(exist_ok=True)
         

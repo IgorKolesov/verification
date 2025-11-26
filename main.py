@@ -4,7 +4,7 @@ from components import CommandExecutor, Task, TaskType, TaskExporter, PlotGenera
 def main():
     print("Start program")
 
-    executor = CommandExecutor(tpc_count=2)
+    executor = CommandExecutor(tpc_count=8)
 
     # tasks = [
     #     Task(0, 10, TaskType.VPU),
@@ -46,12 +46,12 @@ def main():
     print("\n" + "=" * 60)
     print("Exporting results to tasks.json...")
     print("=" * 60)
-    TaskExporter.export_to_json(completed_tasks, "tasks.json")
+    TaskExporter.export_to_json(completed_tasks, "./report/tasks.json")
 
     print("\n" + "=" * 60)
     print("Generating visualization plots...")
     print("=" * 60)
-    PlotGenerator.generate_all_plots(completed_tasks, total_ticks, output_dir=".")
+    PlotGenerator.generate_all_plots(completed_tasks, total_ticks, output_dir="./report")
 
     print("End program")
 

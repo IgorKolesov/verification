@@ -1,97 +1,154 @@
-from .Tick import Tick
+from .Unit import Unit
 from .Status import Status
-from .Task import TaskType, Task
+from .Memory import Memory
+from .TaskType import TaskType
+from .BColors import BColors
+from typing import TYPE_CHECKING, List, Tuple, Callable, Dict
 
-class TPC_CU(Tick):
-    def __init__(self, VPU_executor, ME_executor, FE_executor, addr_start, addr_end):
-        super().__init__()
-        self.queue = []
-        self.active_task = None
-        self.addr_start = addr_start
-        self.addr_end = addr_end
-        self.executors = {
-            TaskType.VPU: VPU_executor,
-            TaskType.ME: ME_executor,
-            TaskType.FE: FE_executor,
-        }
+if TYPE_CHECKING:
+    from .Task import Task
+    from .TPC import TPC
+    from .TPC_Executor import TPC_Executor
 
-    def _wait(self):
-        print(f'TPC_CU: wait')
-        if self.active_task is None:
-            if len(self.queue) > 0:
-                self.active_task = self.queue.pop(0)
-                print('TPC_cu: Start collecting data to local memory')
-                if self.addr_start is None:
-                    self._set_status(Status.COLLECT_TO_LOCAL)
-                    print('TPC_CU: Need to copy data in local memory')
-                elif ((self.addr_start > self.active_task.addr_start) |
-                    (self.addr_end < self.active_task.addr_end)):
-                    self._set_status(Status.COLLECT_TO_LOCAL)
-                    print('TPC_CU: Need to copy data in local memory')
-                else:
-                    self._set_status(self.active_task.status)
-                    print('TPC_CU: Data already in local memory')
-            else:
-                if self.addr_start:
-                    print('TPC_cu: Start sending data to global memory')
-                    self._set_status(Status.SEND_TO_GLOBAL)
+
+class TPC_CU(Unit):
+    def __init__(self, tpc: "TPC"):
+        super().__init__(f"{tpc.name}_CU", BColors.WARNING, 2)
+        self._queue: List["Task"] = []
+        self._tpc: "TPC" = tpc
+        self.noc: List[Tuple[int, int, "TPC_Executor" | None]] = []
+        self._callback_on_complete_by_task: Dict["Task", Callable[["Task"], None]] = {}
+        self._max_queue_len: int = 20
+        self._send_queue: List["Task"] = []
+
+    def get_queue_length(self) -> int:
+        return len(self._queue)
+
+    def add_task(self, task: "Task", callback_on_complete: Callable[["Task"], None]):
+        self.log(f"Adding {task} to CU queue (len={len(self._queue)})")
+        if len(self._queue) >= self._max_queue_len:
+            self.log(f"CU queue full (limit={self._max_queue_len}), rejecting {task}")
+            return False
+
+        self._queue.append(task)
+        self._callback_on_complete_by_task[task] = callback_on_complete
+        return True
+
+    def _on_complete_task(self, task: "Task"):
+        self.log(f"Scheduling send-to-global for completed task {task}")
+        Memory.free_owner(self.noc, task.addr_start, task.addr_end)
+        self._send_queue.append(task)
+
+        busy = (
+            self._tpc._VPU_executor.get_active_task() is not None or
+            self._tpc._ME_executor.get_active_task() is not None or
+            self._tpc._FE_executor.get_active_task() is not None
+        )
+
+        if busy or self._queue:
+                self.log("Executors busy or CU queue not empty — staying in WAIT")
+                self.set_status(Status.WAIT)
+                return
+
+        self.set_status(Status.SEND_TO_GLOBAL)
+
+    def _is_in_noc(self, task: "Task") -> bool:
+        return Memory.is_contained(self.noc, task.addr_start, task.addr_end)
 
     def _action(self):
-        print(f'TPC_CU: action')
-        match self.status:
+        self.log(f"Queue length: {len(self._queue)}")
+
+        if self.noc:
+            for s, e, tpc in self.noc:
+                self.log(f"Occupied NOC range: [{s}, {e}] -> {tpc.name if tpc else 'None'}")
+
+        self.log(f"Status: {self._status.name}")
+
+        match self._status:
             case Status.WAIT:
                 self._wait()
-            case Status.COLLECT_TO_LOCAL:
-                self._get_from_global(self.active_task)
             case Status.SEND_TO_GLOBAL:
                 self._send_to_global()
-            case Status.SEND_TO_EXECUTE:
-                self._send_to_execute(self.active_task)
-            case _:
-                print("Unknown Status")
-                return None
+            case Status.COLLECT_TO_LOCAL:
+                self._collect_to_local()
 
-    def _send_to_execute(self, task: Task):
-        print(f'TPC_CU: send_to_execute')
-        executor = self.executors[task.task_type]
-        if executor is None:
-            print(f"Unknown task type: {task.task_type}")
-            return None
+    def _wait(self):
+        self.log("Checking for tasks in CU queue")
 
-        if executor.active_task is None:
-            executor.add_task(task)
-        else:
-            self.queue.append(task)
+        if not self._queue:
+            self.log("No tasks in queue")
+            return
 
-        print(f'TPC_CU: {self.active_task} ---> {executor}')
-        self.active_task = None
-        self.status = Status.WAIT
+        task = self._queue[0]
+        if not self._is_in_noc(task):
+            self.set_status(Status.COLLECT_TO_LOCAL)
+            return
+
+        task = self._queue[0]
+        executor = self._get_executor(task.task_type)
+
+        if Memory.check_conflict(self.noc, task.addr_start, task.addr_end, executor, ignore_none=True):
+            self.log("Memory conflict detected")
+            return
+
+        if executor.get_active_task() is not None:
+            self.log("Executor is busy")
+            return
+
+        Memory.allocate(self.noc, task.addr_start, task.addr_end, executor, ignore_none=True)
+        executor.set_active_task(self._queue.pop(0), self._on_complete_task)
+        self.set_status(Status.WAIT)
+
+    def _collect_to_local(self):
+        task = self._queue[0]
+        self.log(f"Loading {task} from global memory")
+        self.noc.append((task.addr_start, task.addr_end, None))
+        self.set_status(Status.WAIT)
 
     def _send_to_global(self):
-        print(f'TPC_CU: send_to_global')
-        self.addr_start = None
-        self.addr_end = None
-        self.status = Status.WAIT
-        print('TPC_CU: Data sent to global memory')
+        self.log("Processing send-to-global queue")
 
-    def _get_from_global(self, task:Task):
-        print(f'TPC_CU: get_from_global')
-        if self.addr_start is None:
-            self.addr_start = self.active_task.addr_start
-            self.addr_end = self.active_task.addr_end
-        else:
-            if self.addr_start > self.active_task.addr_start:
-                self.addr_start = self.active_task.addr_start
-            if self.addr_end < self.active_task.addr_end:
-                self.addr_end = self.active_task.addr_end
+        if not self._send_queue:
+            self.set_status(Status.WAIT)
+            return
 
-        self._set_status(Status.SEND_TO_EXECUTE)
-        print('TPC_CU: Data copied in local memory')
+        tasks_to_send = self._send_queue[:]
+        self._send_queue.clear()
 
-    def add_task(self, task:Task):
-        self.queue.append(task)
-        print(f'TPC_CU: {task} added to queue')
+        for task in tasks_to_send:
+            self.log(f"Sending results of {task} to global memory")
 
-    def __str__(self):
-        status = self.print_status()
-        return f'TCP_cu: {status}'
+            still_queued = any(
+                t != task and t.addr_start == task.addr_start and t.addr_end == task.addr_end
+                for t in self._queue
+            )
+
+            active_same_range = False
+            for exec_ in (self._tpc._VPU_executor, self._tpc._ME_executor, self._tpc._FE_executor):
+                active = exec_.get_active_task()
+                if active and active.addr_start == task.addr_start and active.addr_end == task.addr_end:
+                    active_same_range = True
+                    break
+
+            if still_queued or active_same_range:
+                self.log(f"Skipping memory release for {task}: range still in use")
+            else:
+                try:
+                    Memory.release(self.noc, task.addr_start, task.addr_end)
+                except Exception:
+                    self.log(f"Warning: failed to release NoC range for {task}")
+
+            callback = self._callback_on_complete_by_task.pop(task, None)
+            if callback:
+                callback(task)
+
+        self.set_status(Status.WAIT)
+
+    def _get_executor(self, task_type: "TaskType") -> "TPC_Executor":
+        match task_type:
+            case TaskType.VPU:
+                return self._tpc._VPU_executor
+            case TaskType.ME:
+                return self._tpc._ME_executor
+            case TaskType.FE:
+                return self._tpc._FE_executor

@@ -1,38 +1,95 @@
-from .Tick import Tick
+from .Unit import Unit
+from .Memory import Memory
+from typing import TYPE_CHECKING, List, Tuple, Optional
+from .BColors import BColors
 
-class GlobalWorker(Tick):
-    def __init__(self, tasks, tpcs):
-        super().__init__()
-        self.queue = tasks
-        self.tpcs = tpcs
+if TYPE_CHECKING:
+    from .Task import Task
+    from .TPC import TPC
+
+
+class GlobalWorker(Unit):
+    def __init__(self, name: str, tasks: List["Task"], tpcs: List["TPC"]):
+        super().__init__(name, BColors.OKBLUE, 1)
+        self._queue: List["Task"] = tasks
+        self._tpcs: List["TPC"] = tpcs
+        self.completed_tasks: List["Task"] = []
+        self.hbm: List[Tuple[int, int, "TPC"]] = []
 
     def _action(self):
-        print('GlobalWorker: action')
-        if len(self.queue) > 0:
-            task_to_execute = self.queue.pop(0)
-            tpc = self._find_tpc_for_task(task_to_execute)
-            if tpc:
-                print(f'{task_to_execute} ---> {tpc}')
-                tpc.add_task(task_to_execute)
+        self.log(f"Queue length: {len(self._queue)}")
+
+        if self.hbm:
+            for s, e, tpc in self.hbm:
+                self.log(
+                    f"Occupied HBM range: [{s}, {e}] -> {tpc.name if tpc else 'None'}"
+                )
+
+        if not self._queue:
+            return
+
+        while self._queue:
+            candidate_task = self._queue[0]
+
+            assigned_tpc = self._find_tpc_by_hbm_range(candidate_task)
+            self.log(f"Assigned TPC from HBM range: {assigned_tpc}")
+
+            if assigned_tpc is None:
+                for tpc in sorted(self._tpcs, key=lambda t: (t.get_workload(), t.get_total_task_count())):
+                    if not any(
+                        Memory.ranges_overlap(candidate_task.addr_start, candidate_task.addr_end, s, e)
+                        for s, e, _ in self.hbm
+                    ):
+                        assigned_tpc = tpc
+                        break
+
+                if assigned_tpc is None:
+                    self.log("All TPCs are busy or memory ranges conflict, waiting...")
+                    break
+
+            self.log(f"Attempting to assign {candidate_task} to {assigned_tpc.name}")
+
+            accepted = assigned_tpc.add_task(candidate_task, self._on_complete_task)
+            if not accepted:
+                self.log(f"{assigned_tpc.name} rejected task (CU full). Will retry later.")
+                break
+
+            Memory.allocate(self.hbm, candidate_task.addr_start, candidate_task.addr_end, assigned_tpc)
+            candidate_task.assigned_tpc = assigned_tpc
+            self._queue.pop(0)
+
+    def _on_complete_task(self, task: "Task"):
+        self.log(f"{task} completed and collected")
+        self.completed_tasks.append(task)
+
+        if task.assigned_tpc is not None:
+            cu = task.assigned_tpc._TPC_CU
+            
+            has_overlapping_tasks = any(
+                Memory.ranges_overlap(task.addr_start, task.addr_end, t.addr_start, t.addr_end)
+                for t in cu._queue
+            )
+            
+            has_overlapping_in_noc = any(
+                Memory.ranges_overlap(task.addr_start, task.addr_end, s, e)
+                for s, e, _ in cu.noc
+            )
+            
+            if not has_overlapping_tasks and not has_overlapping_in_noc:
+                self.log(f"Releasing HBM for {task}")
+                Memory.release(self.hbm, task.addr_start, task.addr_end)
             else:
-                print(f'{task_to_execute} ---> end of que')
-                self.queue.append(task_to_execute)  # добавляем в конец очереди, если не нашелся tpc
+                self.log(
+                    f"HBM not released (overlapping_tasks={has_overlapping_tasks}, overlapping_noc={has_overlapping_in_noc})"
+                )
+        else:
+            self.log(f"Task has no assigned_tpc, cannot release HBM")
 
-    def _find_tpc_for_task(self, task_to_execute):
-        print('GlobalWorker: find_tpc_for_task')
-        suitable_tpc = None
-        for tpc in self.tpcs:
-            if tpc.addr_start is not None:
-                if ((task_to_execute.addr_start >= tpc.addr_start) |
-                        (task_to_execute.addr_start <= tpc.addr_end) |
-                        (task_to_execute.addr_end >= tpc.addr_start) |
-                        (task_to_execute.addr_end <= tpc.addr_end)):
-                    suitable_tpc = tpc
-                    return suitable_tpc
-            elif suitable_tpc is None:
-                suitable_tpc = tpc
-        return suitable_tpc
+    def _select_least_loaded_tpc(self) -> "TPC":
+        return min(self._tpcs, key=lambda t: t.get_total_task_count())
 
-    def __str__(self):
-        status = self.print_status()
-        return f'GlobalWorker: {status}'
+    def _find_tpc_by_hbm_range(self, task: "Task") -> Optional["TPC"]:
+        for s, e, tpc in self.hbm:
+            if task.addr_start >= s and task.addr_end <= e:
+                return tpc
+        return None

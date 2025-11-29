@@ -1,0 +1,164 @@
+{
+  "export_timestamp": "2025-11-29T10:54:44.298714",
+  "total_tasks": 8,
+  "tasks": [
+    {
+      "id": 763,
+      "type": "VPU",
+      "memory": {
+        "start": 0,
+        "end": 10,
+        "size": 11
+      },
+      "timing": {
+        "actual_start": 8,
+        "actual_end": 11,
+        "exec_time": 3,
+        "total_time": 18,
+        "start_time": 0,
+        "end_time": 18
+      },
+      "executor": "TPC_1_VPU_Executor",
+      "completed": true
+    },
+    {
+      "id": 764,
+      "type": "VPU",
+      "memory": {
+        "start": 11,
+        "end": 20,
+        "size": 10
+      },
+      "timing": {
+        "actual_start": 8,
+        "actual_end": 11,
+        "exec_time": 3,
+        "total_time": 18,
+        "start_time": 0,
+        "end_time": 18
+      },
+      "executor": "TPC_2_VPU_Executor",
+      "completed": true
+    },
+    {
+      "id": 765,
+      "type": "VPU",
+      "memory": {
+        "start": 21,
+        "end": 30,
+        "size": 10
+      },
+      "timing": {
+        "actual_start": 8,
+        "actual_end": 11,
+        "exec_time": 3,
+        "total_time": 18,
+        "start_time": 0,
+        "end_time": 18
+      },
+      "executor": "TPC_3_VPU_Executor",
+      "completed": true
+    },
+    {
+      "id": 766,
+      "type": "VPU",
+      "memory": {
+        "start": 31,
+        "end": 40,
+        "size": 10
+      },
+      "timing": {
+        "actual_start": 8,
+        "actual_end": 11,
+        "exec_time": 3,
+        "total_time": 18,
+        "start_time": 0,
+        "end_time": 18
+      },
+      "executor": "TPC_4_VPU_Executor",
+      "completed": true
+    },
+    {
+      "id": 767,
+      "type": "VPU",
+      "memory": {
+        "start": 41,
+        "end": 50,
+        "size": 10
+      },
+      "timing": {
+        "actual_start": 8,
+        "actual_end": 11,
+        "exec_time": 3,
+        "total_time": 18,
+        "start_time": 0,
+        "end_time": 18
+      },
+      "executor": "TPC_5_VPU_Executor",
+      "completed": true
+    },
+    {
+      "id": 768,
+      "type": "VPU",
+      "memory": {
+        "start": 51,
+        "end": 60,
+        "size": 10
+      },
+      "timing": {
+        "actual_start": 8,
+        "actual_end": 11,
+        "exec_time": 3,
+        "total_time": 18,
+        "start_time": 0,
+        "end_time": 18
+      },
+      "executor": "TPC_6_VPU_Executor",
+      "completed": true
+    },
+    {
+      "id": 769,
+      "type": "VPU",
+      "memory": {
+        "start": 61,
+        "end": 70,
+        "size": 10
+      },
+      "timing": {
+        "actual_start": 8,
+        "actual_end": 11,
+        "exec_time": 3,
+        "total_time": 18,
+        "start_time": 0,
+        "end_time": 18
+      },
+      "executor": "TPC_7_VPU_Executor",
+      "completed": true
+    },
+    {
+      "id": 770,
+      "type": "VPU",
+      "memory": {
+        "start": 71,
+        "end": 80,
+        "size": 10
+      },
+      "timing": {
+        "actual_start": 8,
+        "actual_end": 11,
+        "exec_time": 3,
+        "total_time": 18,
+        "start_time": 0,
+        "end_time": 18
+      },
+      "executor": "TPC_8_VPU_Executor",
+      "completed": true
+    }
+  ],
+  "summary": {
+    "min_actual_start": 8,
+    "max_actual_end": 11,
+    "total_execution_time": 18,
+    "avg_exec_time": 3.0
+  }
+}

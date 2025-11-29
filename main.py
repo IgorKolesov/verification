@@ -6,28 +6,28 @@ def main():
 
     executor = CommandExecutor(tpc_count=8)
 
-    # tasks = [
-    #     Task(0, 10, TaskType.VPU),
-    #     Task(15, 50, TaskType.ME),
-    #     Task(15, 50, TaskType.ME),
-    #     Task(0, 50, TaskType.VPU),
-    #     Task(20, 70, TaskType.ME),
-    #     Task(15, 50, TaskType.ME),
-    #     Task(70, 80, TaskType.VPU),
-    #     Task(88, 90, TaskType.ME),
-    #     Task(40, 50, TaskType.FE),
-    # ]
-
     tasks = [
         Task(0, 10, TaskType.VPU),
-        Task(11, 20, TaskType.VPU),
-        Task(21, 30, TaskType.VPU),
-        Task(31, 40, TaskType.VPU),
-        Task(41, 50, TaskType.VPU),
-        Task(51, 60, TaskType.VPU),
-        Task(61, 70, TaskType.VPU),
-        Task(71, 80, TaskType.VPU),
+        Task(15, 50, TaskType.ME),
+        Task(15, 50, TaskType.ME),
+        Task(0, 50, TaskType.VPU),
+        Task(20, 70, TaskType.ME),
+        Task(15, 50, TaskType.ME),
+        Task(70, 80, TaskType.VPU),
+        Task(88, 90, TaskType.ME),
+        Task(40, 50, TaskType.FE),
     ]
+
+    # tasks = [
+    #     Task(0, 10, TaskType.VPU),
+    #     Task(11, 20, TaskType.VPU),
+    #     Task(21, 30, TaskType.VPU),
+    #     Task(31, 40, TaskType.VPU),
+    #     Task(41, 50, TaskType.VPU),
+    #     Task(51, 60, TaskType.VPU),
+    #     Task(61, 70, TaskType.VPU),
+    #     Task(71, 80, TaskType.VPU),
+    # ]
 
     print("\nInitial tasks:")
     for t in tasks:

@@ -1,9 +1,23 @@
 from typing import TYPE_CHECKING, Optional
+import deal
+
+MAX_MEMORY = 1000
 
 if TYPE_CHECKING:
     from .TaskType import TaskType
     from .TPC import TPC
 
+
+def validate_task(addr_start, addr_end, task_type, result=None):
+    assert isinstance(addr_start, int)
+    assert isinstance(addr_end, int)
+    assert addr_start >= 0
+    assert addr_end >= addr_start
+    assert addr_end <= MAX_MEMORY
+    return True
+
+
+@deal.pre(validate_task)
 class Task:
     _id = 1
 
@@ -18,7 +32,7 @@ class Task:
         self.end_time: Optional[int] = None
         self.executed_by: Optional[str] = None
         self.assigned_tpc: Optional["TPC"] = None
-        self.actual_start_time: Optional[int] = None 
+        self.actual_start_time: Optional[int] = None
         self.actual_end_time: Optional[int] = None
 
     @property
@@ -26,7 +40,7 @@ class Task:
         if self.actual_start_time is not None and self.actual_end_time is not None:
             return self.actual_end_time - self.actual_start_time
         return None
-    
+
     @property
     def total_latency(self) -> Optional[int]:
         if self.start_time is not None and self.end_time is not None:
